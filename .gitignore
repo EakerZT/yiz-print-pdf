@@ -1,0 +1,7 @@
+/.tools/
+/vendor/
+/dist/
+/out/
+*.log
+**/bin/
+**/obj/

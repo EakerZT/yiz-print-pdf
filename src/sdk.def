@@ -1,0 +1,10 @@
+LIBRARY yiz-print-pdf
+EXPORTS
+  YizGetAbiVersion
+  YizInitOptions
+  YizPrintFile
+  YizPrintMemory
+  YizListPrinters
+  YizResultJson
+  YizResultLogs
+  YizFreeResult

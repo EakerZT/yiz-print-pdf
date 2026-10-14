@@ -1,0 +1,21 @@
+source_set("core") {
+  sources = [ "core.cpp", "alternate_text.cpp" ]
+  include_dirs = [ ".." ]
+  deps = [ "//:pdfium" ]
+  configs += [ "//:pdfium_common_config", "//build/config/compiler:exceptions" ]
+  configs -= [ "//build/config/compiler:no_exceptions" ]
+  libs = [ "winspool.lib", "gdi32.lib", "user32.lib", "advapi32.lib" ]
+}
+executable("yiz-print-pdf") {
+  sources = [ "main.cpp" ]
+  deps = [ ":core" ]
+  ldflags = [ "/SUBSYSTEM:CONSOLE,6.01" ]
+}
+shared_library("yiz-print-pdf-sdk") {
+  output_name = "yiz-print-pdf"
+  sources = [ "sdk.cpp" ]
+  deps = [ ":core" ]
+  configs += [ "//build/config/compiler:exceptions" ]
+  configs -= [ "//build/config/compiler:no_exceptions" ]
+  ldflags = [ "/DEF:" + rebase_path("sdk.def", root_build_dir) ]
+}
