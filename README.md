@@ -1,8 +1,48 @@
 # yiz-print-pdf
 
-原生 C++ 命令行 PDF 打印验证工具。交付文件为 `dist/win-x86/yiz-print-pdf.exe` 和 `dist/win-x64/yiz-print-pdf.exe`：分别为 x86、x64，静态链接 PDFium 与 C/C++ 运行库，不需要附带 DLL、.NET、Java、WebView2 或启动解压。仍需要 Windows 系统组件和已安装的打印机驱动。
+**Windows 原生 PDF 打印工具与 SDK / Native PDF printing tool and SDK for Windows**
 
-目标系统为 Windows 7 SP1 及以上。构建目标包含 x86、x64，系统／子系统版本 6.01；尚未在 Win7 实机运行，Win7 兼容性与实际打印清晰度由手动验证确认。
+## 简介 / Introduction
+
+**中文**
+
+yiz-print-pdf 是基于 PDFium 的原生 C++ PDF 打印工具与 SDK，同时提供独立命令行 EXE 和可供 C/C++、C# 集成的 DLL，支持 x86 与 x64。
+
+- **独立命令行工具**：EXE 静态链接 PDFium 和 C/C++ 运行库，无需附带 SDK DLL、.NET、Java 或 WebView2。
+- **文件与内存输入**：SDK 支持直接打印内存中的 PDF，C# 可传入 `byte[]`，无需生成临时 PDF 文件。
+- **替代文字绘制**：通过 Windows GDI 输出受支持的内嵌 TrueType 字形，用于改善部分低分辨率打印机的文字效果；不支持的情况保留 PDFium 原始绘制路径。
+- **布局控制**：支持百分比缩放、适应页面、仅缩小、居中、偏移及纸张设置。
+- **集成资料齐全**：提供 C ABI 头文件、MSVC 导入库、C# 封装和 C++ / C# 示例。
+
+程序仍依赖 Windows 系统组件及已安装的打印机驱动。Windows 7 SP1 是构建兼容性目标，尚待实机验证；实际打印效果取决于 PDF、字体和驱动。成功返回表示提交至 Windows 打印队列，不代表纸张已输出。SDK 无需临时 PDF，但 Windows 打印后台处理仍可能写入 spool 文件。
+
+**English**
+
+yiz-print-pdf is a native C++ PDF printing tool and SDK built on PDFium. It provides a standalone command-line EXE and a DLL for C/C++ and C# integration, with separate x86 and x64 builds.
+
+- **Standalone CLI:** PDFium and the C/C++ runtime are statically linked into the EXE. No accompanying SDK DLL, .NET, Java, or WebView2 is required.
+- **File and memory input:** The SDK accepts PDF buffers directly. C# applications can pass a `byte[]` without creating a temporary PDF file.
+- **Alternative text rendering:** Supported embedded TrueType glyphs are rendered through Windows GDI to improve text output on some low-resolution printers. Unsupported cases retain PDFium's original rendering path.
+- **Layout controls:** Percentage scaling, fit, shrink-only, centering, offsets, and paper settings.
+- **Integration resources:** A C ABI header, MSVC import library, C# wrapper, and C++ / C# examples are included.
+
+Windows system components and an installed printer driver are still required. Windows 7 SP1 is the compatibility target but has not yet been tested on an actual Windows 7 machine. Output quality depends on the PDF, fonts, and driver. A successful result means submission to the Windows print queue, not physical completion. In-memory input avoids application-created temporary PDFs; Windows may still create spool files.
+
+## 下载与使用 / Downloads and usage
+
+Download the matching SDK from [GitHub Releases](https://github.com/EakerZT/yiz-print-pdf/releases). Choose a DLL that matches your application's process architecture. The EXE runs independently of the SDK DLL.
+
+从 [GitHub Releases](https://github.com/EakerZT/yiz-print-pdf/releases) 下载对应架构的 SDK。DLL 必须与调用进程位数一致；EXE 可独立使用。
+
+```powershell
+# Run from the extracted SDK directory / 在解压后的 SDK 目录运行
+yiz-print-pdf.exe --list-printers
+yiz-print-pdf.exe --file "ticket.pdf" --printer "Printer Name" --scale fit
+```
+
+Build both architectures with `./build.ps1`, or select one with `./build.ps1 -Architecture x64`. Build outputs are placed in `dist/win-x86` and `dist/win-x64`. The following sections contain the detailed Chinese reference; the public header and C# wrapper also include English API comments.
+
+运行 `./build.ps1` 构建两种架构，或使用 `./build.ps1 -Architecture x64` 单独构建。产物位于 `dist/win-x86` 和 `dist/win-x64`。以下为中文详细参考，公共头文件和 C# 封装也提供英文接口注释。
 
 ## 快速验证
 
