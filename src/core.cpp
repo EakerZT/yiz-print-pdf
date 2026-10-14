@@ -52,7 +52,7 @@ int Error(int code, const wchar_t* message, DWORD win32 = 0) {
   return code;
 }
 void Help() {
-  Line("yiz-print-pdf 0.1.0 / PDFium chromium/5414 / static\n"
+  Line("yiz-print-pdf 0.2.0 / PDFium chromium/5414 / static\n"
        "Usage:\n"
        "  yiz-print-pdf.exe --list-printers\n"
        "  yiz-print-pdf.exe --file <PDF> --inspect\n"

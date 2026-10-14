@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 using YizPrinting;
 class Smoke
 {
@@ -25,6 +26,33 @@ class Smoke
             Check(r.Code == 0 && r.Json == file.Json, "concurrent/repeated memory calls");
         })).ToArray());
         Check(PrinterSdk.ListPrinters().Code == 0, "enumeration");
+        var batch = PrinterSdk.PrintMemoryBatch(new[] { bytes, bytes }, options);
+        var fileBatch = PrinterSdk.PrintFiles(new[] { args[0], args[0] }, options);
+        Check(batch.Code == 0 && fileBatch.Code == 0 && batch.Json == fileBatch.Json, "batch file/memory parity");
+        using (var parsed = JsonDocument.Parse(batch.Json)) {
+            Check(parsed.RootElement.GetProperty("completed").GetInt32() == 2, "batch success count");
+            Check(parsed.RootElement.GetProperty("failedIndex").GetInt32() == -1, "batch success index");
+        }
+        var partial = PrinterSdk.PrintMemoryBatch(new[] { bytes, new byte[] {1,2,3}, bytes }, options);
+        Check(partial.Code == 3, "batch PDF failure");
+        using (var parsed = JsonDocument.Parse(partial.Json)) {
+            var root = parsed.RootElement;
+            Check(root.GetProperty("completed").GetInt32() == 1 && root.GetProperty("attempted").GetInt32() == 2, "stop after failure");
+            Check(root.GetProperty("failedIndex").GetInt32() == 1, "failure index");
+            Check(root.GetProperty("items")[2].GetProperty("status").GetString() == "skipped", "skip remaining");
+        }
+        var missing = PrinterSdk.PrintFiles(new[] { args[0], Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf"), args[0] }, options);
+        Check(missing.Code == 3 && missing.Json.Contains("\"failedIndex\":1"), "missing batch file");
+        options.Operation = Operation.Emf;
+        Check(PrinterSdk.PrintMemoryBatch(new[] { bytes }, options).Code == 2, "reject batch EMF");
+        options.Operation = Operation.Inspect;
+        bool rejected = false;
+        try { PrinterSdk.PrintMemoryBatch(new byte[0][], options); } catch (ArgumentOutOfRangeException) { rejected = true; }
+        Check(rejected, "empty batch rejection");
+        Task.WaitAll(Enumerable.Range(0, 4).Select(i => Task.Run(() => {
+            Check(PrinterSdk.PrintMemoryBatch(new[] {bytes, bytes}, options).Code == 0, "concurrent batch");
+        })).ToArray());
+        Console.WriteLine("PASS: batch parity, partial failure, missing file, skipped items, rejected EMF/empty batch, concurrent batch");
         Console.WriteLine("PASS: ABI, file/memory parity, invalid input, repeated/concurrent calls, enumeration (no printing)");
     }
 }

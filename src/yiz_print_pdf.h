@@ -31,6 +31,10 @@ typedef struct YizPrintOptions {
   double width_mm, height_mm; /* both zero (default) or both >0..3000 */
   double offset_x_mm, offset_y_mm; /* -3000..3000 */
 } YizPrintOptions;
+typedef struct YizPdfBuffer {
+  const void* data;
+  size_t length;
+} YizPdfBuffer;
 #pragma pack(pop)
 typedef struct YizResult YizResult;
 /* All calls are synchronous. PDF operations are serialized inside this module.
@@ -43,6 +47,14 @@ YIZ_API uint32_t YIZ_CALL YizGetAbiVersion(void);
 YIZ_API int32_t YIZ_CALL YizInitOptions(YizPrintOptions* options, uint32_t size);
 YIZ_API int32_t YIZ_CALL YizPrintFile(const wchar_t* path, const YizPrintOptions* options, YizResult** result);
 YIZ_API int32_t YIZ_CALL YizPrintMemory(const void* data, size_t length, const YizPrintOptions* options, YizResult** result);
+/* Batch: 1..100 PDFs, same options, one spool job per PDF, in input order.
+ * Stops on first failure; later items are skipped. No rollback or retry.
+ * PRINT and INSPECT supported; EMF rejected to prevent overwriting one path.
+ * All inputs remain valid until return; memory batch total <=512 MiB.
+ * Result JSON contains total/completed/attempted/failedIndex and items (0-based).
+ * Calls to this DLL cannot interleave with a running batch. */
+YIZ_API int32_t YIZ_CALL YizPrintFiles(const wchar_t* const* paths, uint32_t count, const YizPrintOptions* options, YizResult** result);
+YIZ_API int32_t YIZ_CALL YizPrintMemoryBatch(const YizPdfBuffer* buffers, uint32_t count, const YizPrintOptions* options, YizResult** result);
 YIZ_API int32_t YIZ_CALL YizListPrinters(YizResult** result);
 YIZ_API const char* YIZ_CALL YizResultJson(const YizResult* result);
 YIZ_API const char* YIZ_CALL YizResultLogs(const YizResult* result);

@@ -46,6 +46,12 @@ namespace YizPrinting
         private static extern int YizPrintFile(string path, ref PrintOptions options, out IntPtr result);
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         private static extern int YizPrintMemory(IntPtr bytes, UIntPtr length, ref PrintOptions options, out IntPtr result);
+        [StructLayout(LayoutKind.Sequential, Pack = 8)]
+        private struct PdfBuffer { public IntPtr Data; public UIntPtr Length; }
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        private static extern int YizPrintFiles([In] IntPtr[] paths, uint count, ref PrintOptions options, out IntPtr result);
+        [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        private static extern int YizPrintMemoryBatch([In] PdfBuffer[] buffers, uint count, ref PrintOptions options, out IntPtr result);
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         private static extern int YizListPrinters(out IntPtr result);
         [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -85,6 +91,45 @@ namespace YizPrinting
                 int code = YizPrintMemory(pinned.AddrOfPinnedObject(), new UIntPtr((uint)pdf.Length), ref options, out result);
                 return Read(code, result);
             } finally { pinned.Free(); }
+        }
+        // One independent job per PDF, sequentially; stop on first failure.
+        // Inspect is supported for dry checks; Emf is not supported in batches.
+        public static PrintResult PrintFiles(string[] paths, PrintOptions options)
+        {
+            if (paths == null) throw new ArgumentNullException("paths");
+            if (paths.Length == 0 || paths.Length > 100) throw new ArgumentOutOfRangeException("paths");
+            var pointers = new IntPtr[paths.Length];
+            try {
+                for (int i = 0; i < paths.Length; i++) {
+                    if (string.IsNullOrEmpty(paths[i]) || paths[i].IndexOf('\0') >= 0)
+                        throw new ArgumentException("Paths must be nonempty and contain no NUL characters.", "paths");
+                    pointers[i] = Marshal.StringToHGlobalUni(paths[i]);
+                }
+                IntPtr result;
+                int code = YizPrintFiles(pointers, (uint)pointers.Length, ref options, out result);
+                return Read(code, result);
+            } finally { foreach (var pointer in pointers) if (pointer != IntPtr.Zero) Marshal.FreeHGlobal(pointer); }
+        }
+        public static PrintResult PrintMemoryBatch(byte[][] pdfs, PrintOptions options)
+        {
+            if (pdfs == null) throw new ArgumentNullException("pdfs");
+            if (pdfs.Length == 0 || pdfs.Length > 100) throw new ArgumentOutOfRangeException("pdfs");
+            var buffers = new PdfBuffer[pdfs.Length];
+            var pins = new GCHandle[pdfs.Length];
+            long total = 0;
+            try {
+                for (int i = 0; i < pdfs.Length; i++) {
+                    var bytes = pdfs[i];
+                    if (bytes == null || bytes.Length == 0) throw new ArgumentException("Empty PDF buffer.", "pdfs");
+                    total += bytes.Length;
+                    if (total > 512L * 1024 * 1024) throw new ArgumentOutOfRangeException("pdfs", "Batch exceeds 512 MiB.");
+                    pins[i] = GCHandle.Alloc(bytes, GCHandleType.Pinned);
+                    buffers[i] = new PdfBuffer { Data = pins[i].AddrOfPinnedObject(), Length = new UIntPtr((uint)bytes.Length) };
+                }
+                IntPtr result;
+                int code = YizPrintMemoryBatch(buffers, (uint)buffers.Length, ref options, out result);
+                return Read(code, result);
+            } finally { foreach (var pin in pins) if (pin.IsAllocated) pin.Free(); }
         }
         public static PrintResult ListPrinters()
         {

@@ -4,6 +4,8 @@ EXPORTS
   YizInitOptions
   YizPrintFile
   YizPrintMemory
+  YizPrintFiles
+  YizPrintMemoryBatch
   YizListPrinters
   YizResultJson
   YizResultLogs

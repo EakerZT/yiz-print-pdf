@@ -218,8 +218,48 @@ example-cpp.exe "C:\路径\票据.pdf"
 默认 build.ps1 构建两套架构；可通过 -Architecture x86 或 -Architecture x64 单独构建。两套构建缓存分别位于 vendor/pdfium/out/Release-x86 和 Release-x64。
 
 
-## 更名与架构
-
-项目由 lc-print-pdf 更名为 yiz-print-pdf。原生文件名为 `yiz-print-pdf.exe/.dll/.lib`，公共头文件为 `yiz_print_pdf.h`，C API 前缀为 `Yiz`、宏前缀为 `YIZ_`，C# 命名空间为 `YizPrinting`，绑定文件为 `YizPrintPdf.cs`。旧名称不提供二进制兼容别名，调用方需同步更新引用。
+## 架构
 
 默认 `build.ps1` 构建 x86 与 x64；`-Architecture x86` 或 `-Architecture x64` 只构建指定架构。`dist/win-x86`、`dist/win-x64` 各自包含完整 SDK。仓库内 C# 示例默认 x86，使用 `-p:PlatformTarget=x64` 切换；发行目录内示例默认使用所在目录的架构。
+
+## 批量 API / Batch API（v0.2.0）
+
+同一套 `YizPrintOptions` 可用于多份 PDF：
+
+- `YizPrintFiles(paths, count, options, result)`：UTF-16 文件路径数组。
+- `YizPrintMemoryBatch(buffers, count, options, result)`：`YizPdfBuffer` 数组，每项包含 PDF 指针和字节长度。
+- C#：`PrinterSdk.PrintFiles(string[], options)` 和 `PrinterSdk.PrintMemoryBatch(byte[][], options)`。
+
+每批 1–100 份；内存批次总大小不超过 512 MiB。整批同步、按输入顺序执行，每份 PDF 创建独立打印作业；同一 DLL 内其他调用不会插入该批次。首次失败后停止，后续项标记为 skipped，已提交的作业不回滚、不自动重试。切纸时机仍由驱动决定。支持 Print 和 Inspect；批量 Emf 不支持，以免覆盖同一路径。现有单文档接口和 ABI v1 结构体保持兼容；新增函数需要 v0.2.0 或更新 DLL。
+
+Use one options structure for 1–100 PDFs. Each PDF remains an independent spool job, processed in input order. Calls through the same DLL cannot interleave with a running batch. Processing stops at the first failure; later items are skipped. Already submitted jobs are not rolled back or retried. Memory batches are limited to 512 MiB in total; all buffers must remain valid and unchanged until the synchronous call returns. Print and Inspect are supported; batch EMF is rejected to avoid overwriting a shared output path. Existing single-document APIs and ABI v1 remain compatible; the new exports require DLL v0.2.0 or later.
+
+```csharp
+var options = YizPrinting.PrintOptions.Create("XP-80C");
+options.ScaleMode = YizPrinting.ScaleMode.Fit;
+var result = await Task.Run(() =>
+    YizPrinting.PrinterSdk.PrintMemoryBatch(new[] { pdfBytes1, pdfBytes2 }, options));
+// 或 / Or: PrinterSdk.PrintFiles(new[] { "a.pdf", "b.pdf" }, options)
+```
+
+```cpp
+YizPrintOptions options;
+YizInitOptions(&options, sizeof(options));
+options.printer = L"XP-80C";
+options.scale_mode = YIZ_SCALE_FIT;
+const wchar_t* paths[] = { L"a.pdf", L"b.pdf" };
+YizResult* result = nullptr;
+int code = YizPrintFiles(paths, 2, &options, &result);
+// Read YizResultJson(result) / YizResultLogs(result), then:
+YizFreeResult(result);
+```
+
+结果 JSON / Result JSON：
+
+- `total`：输入项数 / Input count.
+- `completed`：成功处理项数，打印时代表提交成功 / Successful items; submitted jobs for Print.
+- `attempted`：已尝试项数（含失败项） / Attempted items, including the failed item.
+- `failedIndex`：首个失败项的零基索引，无失败为 -1 / Zero-based first failed index, or -1.
+- `items`：每项包含 `index`，已尝试项包含 `code` 和原单项 `result`（打印成功时含 jobId）；未执行项为 `status: "skipped"` / Per-item index and code/result, or skipped status.
+
+参数结构错误或无效输入列表可能在执行前直接返回普通失败 JSON；调用方应先检查返回码及 JSON。故障项本身可能已输出部分页面，不要把 completed 理解为已实际出纸的数量。Parameter/list errors may return a regular error JSON before processing. A failing document may already have printed some pages; completed does not report physical print completion.
