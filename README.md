@@ -2,9 +2,9 @@
 
 **Windows 原生 PDF 打印工具与 SDK / Native PDF printing tool and SDK for Windows**
 
-当前版本 / Current release: **0.0.2** — [下载 / Download](https://github.com/EakerZT/yiz-print-pdf/releases/tag/v0.0.2)
+当前版本 / Current release: **0.3.0** — [下载 / Download](https://github.com/EakerZT/yiz-print-pdf/releases/tag/v0.3.0)
 
-### 0.0.2 更新 / What's new
+### 0.3.0 更新 / What's new
 
 - 支持从 TTC 集合提取 PDFium 实际选择的 TrueType 字体，未嵌入字体的 PDF 可使用本机字体进行替代绘制。
 - 默认文字模式为 `original`；使用 `--text-mode alternate` 或 SDK `TextMode.Alternate` 开启自定义绘制。C ABI 仍为 v1，已有批量接口保留。
@@ -12,7 +12,6 @@
 - TTC regression checks pass on x86 and x64: the non-embedded Microsoft YaHei sample renders 36 alternate glyphs with zero fallbacks. Embedded-font and repeated in-memory rendering checks also pass. Physical print quality still requires printer testing.
 - Text rendering defaults to `original`. Enable the alternative path using `--text-mode alternate` or SDK `TextMode.Alternate`; the C ABI remains v1 and batch APIs are preserved.
 
-历史 Release `v0.1.0` / `v0.2.0` 保留；本次发布按当前版本编号使用 `v0.0.2`，不是按语义版本排序的升级。Existing `v0.1.0` / `v0.2.0` releases remain available; this release uses the requested `v0.0.2` numbering rather than a semver-increasing version.
 
 ## 简介 / Introduction
 
@@ -238,7 +237,7 @@ example-cpp.exe "C:\路径\票据.pdf"
 
 默认 `build.ps1` 构建 x86 与 x64；`-Architecture x86` 或 `-Architecture x64` 只构建指定架构。`dist/win-x86`、`dist/win-x64` 各自包含完整 SDK。仓库内 C# 示例默认 x86，使用 `-p:PlatformTarget=x64` 切换；发行目录内示例默认使用所在目录的架构。
 
-## 批量 API / Batch API（v0.0.2）
+## 批量 API / Batch API（v0.2.0 起 / since v0.2.0）
 
 同一套 `YizPrintOptions` 可用于多份 PDF：
 
@@ -246,9 +245,9 @@ example-cpp.exe "C:\路径\票据.pdf"
 - `YizPrintMemoryBatch(buffers, count, options, result)`：`YizPdfBuffer` 数组，每项包含 PDF 指针和字节长度。
 - C#：`PrinterSdk.PrintFiles(string[], options)` 和 `PrinterSdk.PrintMemoryBatch(byte[][], options)`。
 
-每批 1–100 份；内存批次总大小不超过 512 MiB。整批同步、按输入顺序执行，每份 PDF 创建独立打印作业；同一 DLL 内其他调用不会插入该批次。首次失败后停止，后续项标记为 skipped，已提交的作业不回滚、不自动重试。切纸时机仍由驱动决定。支持 Print 和 Inspect；批量 Emf 不支持，以免覆盖同一路径。现有单文档接口和 ABI v1 结构体保持兼容；新增函数需要 v0.0.2 或更新 DLL。
+每批 1–100 份；内存批次总大小不超过 512 MiB。整批同步、按输入顺序执行，每份 PDF 创建独立打印作业；同一 DLL 内其他调用不会插入该批次。首次失败后停止，后续项标记为 skipped，已提交的作业不回滚、不自动重试。切纸时机仍由驱动决定。支持 Print 和 Inspect；批量 Emf 不支持，以免覆盖同一路径。现有单文档接口和 ABI v1 结构体保持兼容；新增函数需要 v0.2.0 或更新 DLL。
 
-Use one options structure for 1–100 PDFs. Each PDF remains an independent spool job, processed in input order. Calls through the same DLL cannot interleave with a running batch. Processing stops at the first failure; later items are skipped. Already submitted jobs are not rolled back or retried. Memory batches are limited to 512 MiB in total; all buffers must remain valid and unchanged until the synchronous call returns. Print and Inspect are supported; batch EMF is rejected to avoid overwriting a shared output path. Existing single-document APIs and ABI v1 remain compatible; the new exports require DLL v0.0.2 or later.
+Use one options structure for 1–100 PDFs. Each PDF remains an independent spool job, processed in input order. Calls through the same DLL cannot interleave with a running batch. Processing stops at the first failure; later items are skipped. Already submitted jobs are not rolled back or retried. Memory batches are limited to 512 MiB in total; all buffers must remain valid and unchanged until the synchronous call returns. Print and Inspect are supported; batch EMF is rejected to avoid overwriting a shared output path. Existing single-document APIs and ABI v1 remain compatible; the new exports require DLL v0.2.0 or later.
 
 ```csharp
 var options = YizPrinting.PrintOptions.Create("XP-80C");
