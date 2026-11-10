@@ -52,7 +52,7 @@ int Error(int code, const wchar_t* message, DWORD win32 = 0) {
   return code;
 }
 void Help() {
-  Line("yiz-print-pdf 0.3.0 / PDFium chromium/5414 / static\n"
+  Line("yiz-print-pdf 0.4.0 / PDFium chromium/5414 / static\n"
        "Usage:\n"
        "  yiz-print-pdf.exe --list-printers\n"
        "  yiz-print-pdf.exe --file <PDF> --inspect\n"
@@ -63,6 +63,7 @@ void Help() {
        "  --center                       Center within printable area\n"
        "  --offset-x <mm> --offset-y <mm> Additional offset; positive right/down\n"
        "  --paper pdf|driver              Default: driver (driver paper size)\n"
+       "  --orientation driver|portrait|landscape  Default: driver\n"
        "  --width <mm> --height <mm>       Optional fixed paper, specify both\n"
        "  --require-alternate             Abort if any text run falls back,\n"
        "                                  or a page has no alternate glyphs\n"
@@ -82,6 +83,7 @@ struct Options {
   bool alternate = false, inspect = false, driver_paper = true, strict = false;
   bool center = false, scale_set = false;
   std::wstring scale_mode = L"percent";
+  short orientation = 0;
   double offset_x = 0, offset_y = 0;
   double scale = 100, width = 0, height = 0;
 };
@@ -158,7 +160,17 @@ struct Printer {
       dm->dmPaperLength = short(std::lround(h * 10));
       dm->dmOrientation = DMORIENT_PORTRAIT;
     }
+    if (opt.orientation) {
+      dm->dmFields |= DM_ORIENTATION;
+      dm->dmOrientation = opt.orientation;
+    }
     if (DocumentPropertiesW(nullptr, handle, const_cast<wchar_t*>(opt.printer.c_str()), dm, dm, DM_IN_BUFFER | DM_OUT_BUFFER) != IDOK) return false;
+    if (opt.orientation &&
+        (!(dm->dmFields & DM_ORIENTATION) || dm->dmOrientation != opt.orientation)) {
+      Capture(true, "Printer driver did not accept the requested paper orientation\n");
+      SetLastError(ERROR_NOT_SUPPORTED);
+      return false;
+    }
     if (!dc) dc = CreateDCW(L"WINSPOOL", opt.printer.c_str(), nullptr, dm);
     else { HDC next = ResetDCW(dc, dm); if (!next) return false; dc = next; }
     return dc != nullptr;
@@ -188,6 +200,11 @@ static int Execute(int argc, const wchar_t* const* argv, const void* memory, siz
     } else if (arg == L"--paper") {
       if (wcscmp(value, L"pdf") && wcscmp(value, L"driver")) return Error(2, L"Invalid paper mode");
       opt.driver_paper = !wcscmp(value, L"driver");
+    } else if (arg == L"--orientation") {
+      if (!wcscmp(value, L"driver")) opt.orientation = 0;
+      else if (!wcscmp(value, L"portrait")) opt.orientation = DMORIENT_PORTRAIT;
+      else if (!wcscmp(value, L"landscape")) opt.orientation = DMORIENT_LANDSCAPE;
+      else return Error(2, L"Orientation must be driver, portrait, or landscape");
     } else if (arg == L"--scale") {
       if (opt.scale_set) return Error(2, L"Specify --scale only once");
       opt.scale_set = true;

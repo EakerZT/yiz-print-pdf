@@ -2,7 +2,16 @@
 
 **Windows 原生 PDF 打印工具与 SDK / Native PDF printing tool and SDK for Windows**
 
-当前版本 / Current release: **0.3.0** — [下载 / Download](https://github.com/EakerZT/yiz-print-pdf/releases/tag/v0.3.0)
+当前版本 / Current release: **0.4.0** — [下载 / Download](https://github.com/EakerZT/yiz-print-pdf/releases/tag/v0.4.0)
+
+### 0.4.0 更新 / What's new
+
+- CLI 新增 `--orientation driver|portrait|landscape`，可显式设置纸张方向，并按驱动实际返回的可打印区域布局。默认行为与 SDK ABI v1 保持兼容。
+- The CLI now supports `--orientation driver|portrait|landscape`. Layout uses the printable area reported by the driver. Default behavior and SDK ABI v1 are unchanged.
+
+```powershell
+.\yiz-print-pdf.exe --file "ticket.pdf" --printer "Printer Name" --orientation landscape --scale fit --center
+```
 
 ### 0.3.0 更新 / What's new
 
@@ -86,6 +95,7 @@ Build both architectures with `./build.ps1`, or select one with `./build.ps1 -Ar
 | `--offset-x <mm>` | 额外水平偏移，正数向右、负数向左；默认 0，范围 -3000–3000 mm |
 | `--offset-y <mm>` | 额外垂直偏移，正数向下、负数向上；默认 0，范围 -3000–3000 mm |
 | `--paper pdf\|driver` | 默认 `driver`，使用驱动默认纸张（含页长）；`pdf` 按 PDF 页面尺寸设置自定义纸张 |
+| `--orientation driver\|portrait\|landscape` | CLI 纸张方向，默认 `driver`；显式指定纵向或横向时由驱动确认。不额外旋转 PDF 内容 |
 | `--width <mm> --height <mm>` | 固定纸张，须同时指定；范围大于 0、不超过 3000 mm；覆盖 `--paper` |
 | `--require-alternate` | 严格验证：文字调用出现回退，或某页没有替代字形时中止；纯图片页也会因此中止 |
 | `--inspect` | 只读取并输出 PDF 各页尺寸，无需打印机，不打印 |
@@ -95,6 +105,8 @@ Build both architectures with `./build.ps1`, or select one with `./build.ps1 -Ar
 | `--help` | 使用帮助 |
 
 纸型通过 DEVMODE 交给驱动确认，最终尺寸以驱动接受的设置为准。日志输出 PDF 尺寸、请求纸张尺寸、驱动物理尺寸、可打印尺寸、左上右下硬件边距、实际缩放比例、绘制起点和输出尺寸。
+
+`--orientation driver` 保留原行为：驱动纸型沿用驱动方向，PDF 或固定自定义纸型沿用纵向。`portrait` / `landscape` 覆盖这个方向设置，纸型宽高仍按原值提交，布局按驱动实际返回的可打印区域计算。如果驱动在确认配置时拒绝显式方向，命令返回 4。可配合 `--emf` 验证，无需出纸；`--inspect` 仍只报告 PDF 自身尺寸。现有 SDK 接口不变。
 
 百分比模式默认按物理纸张左上角对齐，保持原有行为；`fit` / `shrink` 默认按可打印区域左上角对齐，同时考虑可打印宽度和高度。`--center` 将任意模式改为在可打印区域居中；偏移在对齐之后叠加。缩放不会裁掉 PDF 自带留白，也不会改变纸张大小。`clipped=1` 表示页面矩形超出可打印区域，空白超出也会触发，并不一定代表文字被裁切。EMF 记录相同布局，但不模拟硬件裁切。
 
