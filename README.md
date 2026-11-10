@@ -2,6 +2,18 @@
 
 **Windows 原生 PDF 打印工具与 SDK / Native PDF printing tool and SDK for Windows**
 
+当前版本 / Current release: **0.0.2** — [下载 / Download](https://github.com/EakerZT/yiz-print-pdf/releases/tag/v0.0.2)
+
+### 0.0.2 更新 / What's new
+
+- 支持从 TTC 集合提取 PDFium 实际选择的 TrueType 字体，未嵌入字体的 PDF 可使用本机字体进行替代绘制。
+- 默认文字模式为 `original`；使用 `--text-mode alternate` 或 SDK `TextMode.Alternate` 开启自定义绘制。C ABI 仍为 v1，已有批量接口保留。
+- 提供 x86 / x64 的独立 EXE、DLL、导入库、头文件与 C# / C++ 示例。
+- TTC regression checks pass on x86 and x64: the non-embedded Microsoft YaHei sample renders 36 alternate glyphs with zero fallbacks. Embedded-font and repeated in-memory rendering checks also pass. Physical print quality still requires printer testing.
+- Text rendering defaults to `original`. Enable the alternative path using `--text-mode alternate` or SDK `TextMode.Alternate`; the C ABI remains v1 and batch APIs are preserved.
+
+历史 Release `v0.1.0` / `v0.2.0` 保留；本次发布按当前版本编号使用 `v0.0.2`，不是按语义版本排序的升级。Existing `v0.1.0` / `v0.2.0` releases remain available; this release uses the requested `v0.0.2` numbering rather than a semver-increasing version.
+
 ## 简介 / Introduction
 
 **中文**
@@ -10,7 +22,7 @@ yiz-print-pdf 是基于 PDFium 的原生 C++ PDF 打印工具与 SDK，同时提
 
 - **独立命令行工具**：EXE 静态链接 PDFium 和 C/C++ 运行库，无需附带 SDK DLL、.NET、Java 或 WebView2。
 - **文件与内存输入**：SDK 支持直接打印内存中的 PDF，C# 可传入 `byte[]`，无需生成临时 PDF 文件。
-- **替代文字绘制**：通过 Windows GDI 输出受支持的内嵌 TrueType 字形，用于改善部分低分辨率打印机的文字效果；不支持的情况保留 PDFium 原始绘制路径。
+- **替代文字绘制**：通过 Windows GDI 输出受支持的内嵌或系统 TrueType 字形（含 TTC 集合），用于改善部分低分辨率打印机的文字效果；不支持的情况保留 PDFium 原始绘制路径。
 - **布局控制**：支持百分比缩放、适应页面、仅缩小、居中、偏移及纸张设置。
 - **集成资料齐全**：提供 C ABI 头文件、MSVC 导入库、C# 封装和 C++ / C# 示例。
 
@@ -22,7 +34,7 @@ yiz-print-pdf is a native C++ PDF printing tool and SDK built on PDFium. It prov
 
 - **Standalone CLI:** PDFium and the C/C++ runtime are statically linked into the EXE. No accompanying SDK DLL, .NET, Java, or WebView2 is required.
 - **File and memory input:** The SDK accepts PDF buffers directly. C# applications can pass a `byte[]` without creating a temporary PDF file.
-- **Alternative text rendering:** Supported embedded TrueType glyphs are rendered through Windows GDI to improve text output on some low-resolution printers. Unsupported cases retain PDFium's original rendering path.
+- **Alternative text rendering:** Supported embedded or system TrueType glyphs (including TTC collections) are rendered through Windows GDI to improve text output on some low-resolution printers. Unsupported cases retain PDFium's original rendering path.
 - **Layout controls:** Percentage scaling, fit, shrink-only, centering, offsets, and paper settings.
 - **Integration resources:** A C ABI header, MSVC import library, C# wrapper, and C++ / C# examples are included.
 
@@ -69,7 +81,7 @@ Build both architectures with `./build.ps1`, or select one with `./build.ps1 -Ar
 | --- | --- |
 | `--file <路径>` | PDF 文件，支持中文路径；当前不处理密码 PDF，文件不超过 512 MiB |
 | `--printer <名称>` | Windows 系统打印机全名，必填；不会自动选择默认打印机 |
-| `--text-mode alternate\|original` | 默认 `alternate` |
+| `--text-mode alternate\|original` | 默认 `original`（命令行也接受 `origin`） |
 | `--scale <百分比>\|fit\|shrink` | 默认 `100`，百分比范围 10–200；`fit` 等比例适应可打印区域，允许放大；`shrink` 仅缩小。只能指定一次，不改变纸张尺寸 |
 | `--center` | 在驱动可打印区域内水平、垂直居中，默认关闭 |
 | `--offset-x <mm>` | 额外水平偏移，正数向右、负数向左；默认 0，范围 -3000–3000 mm |
@@ -109,15 +121,19 @@ Build both architectures with `./build.ps1`, or select one with `./build.ps1 -Ar
 
 `prepare-build.py` 在 `CGdiPrinterDriver::DrawDeviceText()` 中接入 `YizDrawDeviceText()`，不拆分图文层、不重新排版：
 
-1. 取得 PDFium 当前字体的 TrueType 数据。
+1. 取得 PDFium 当前实际使用的字体数据（PDF 内嵌字体或系统替代字体）；如果是 TTC，按 FreeType 当前 face index 提取对应字体，重建独立 TrueType 表目录与校验和，保留字形编号。
 2. 仅重写字体内部名称，使用唯一名称通过 `AddFontMemResourceEx` 注册进程私有字体，防止系统字体与 PDF 子集字体同名造成字形索引错配。
 3. 创建 GDI 字体，保留 PDFium 提供的逐字形位置和变换，使用 `ExtTextOutW(ETO_GLYPH_INDEX)` 输出文字。
 4. 非文字部分及原有绘制顺序继续由 PDFium 处理。
 5. 不支持的字体、竖排或透明文字等情况回退原路径并统计；文字输出中途失败则记录错误，中止作业，避免把已经绘制的文字再画一遍。
 
-这是参考 QZ 的“让文字进入设备文字接口”的原理编写的 Windows 实现，并非复制 Java AWT。QZ 使用 Unicode + AWT drawString；这里使用同一内嵌字体的 glyph ID + Win32 ExtTextOutW，避免对 PDF 子集字体做二次 Unicode 字形映射。不承诺二者底层栅格化完全相同。
+这是参考 QZ 的“让文字进入设备文字接口”的原理编写的 Windows 实现，并非复制 Java AWT。QZ 使用 Unicode + AWT drawString；这里使用 PDFium 实际字体的 glyph ID + Win32 ExtTextOutW，避免对 PDF 子集字体做二次 Unicode 字形映射。不承诺二者底层栅格化完全相同。
 
-当前替代路径支持可注册的 TrueType 单字体（含常见内嵌宋体子集）。TTC、CFF/Type1 等不支持的输入保留 PDFium 原路径；透明度、文字裁剪等也可能由上层渲染器走其他路径。`alternateGlyphs` 是实际替代输出数量，`fallbackRuns` 仅统计进入该钩子后回退的调用，不能代表页面所有特殊文字对象的完整覆盖率。
+当前替代路径支持可注册的 TrueType 单字体（含常见内嵌宋体子集），以及 TTC 中的 TrueType 字体（例如未嵌入字体的 PDF 使用本机微软雅黑）。CFF/Type1、命名可变字体实例等不支持的输入保留 PDFium 原路径；透明度、文字裁剪等也可能由上层渲染器走其他路径。`alternateGlyphs` 是实际替代输出数量，`fallbackRuns` 仅统计进入该钩子后回退的调用，不能代表页面所有特殊文字对象的完整覆盖率。
+
+TTC collections are supported by extracting the exact face selected by PDFium/FreeType into a standalone TrueType font. Table offsets and checksums are rebuilt without changing glyph IDs. This also supports non-embedded PDF fonts resolved to installed Windows TTC fonts; no API changes or system-wide font installation are required. Unsupported formats continue to use PDFium's original renderer.
+
+可用 `dotnet run --project tests/Smoke.csproj -c Release -p:PlatformTarget=x64 -- <PDF路径> <系统打印机名称>` 验证内存调用和重复严格替代绘制；把 x64 换成 x86 可检查另一架构。此测试仅生成并删除临时 EMF，不出纸；测试 PDF 的全部文字应适用于替代绘制。
 
 缓存中的字体仅存在于当前进程内存，结束时释放。诊断 EMF 引用这些字体，仅用于分析绘制记录，不作为跨进程可移植的文档格式。
 
@@ -170,7 +186,7 @@ EXE 与 DLL 各自仅依赖 Windows 系统 DLL 和安装的打印机驱动。C++
 ### C ABI 约定
 
 - `__cdecl` 调用约定，导出函数名不带修饰；结构体 `Pack=8`，枚举和开关均为 32 位整数。
-- `YizInitOptions(&options, sizeof(options))` 初始化：ABI=1、driver 纸张、100% 缩放、alternate 文字、打印操作、无居中/偏移。
+- `YizInitOptions(&options, sizeof(options))` 初始化：ABI=1、driver 纸张、100% 缩放、original 文字、打印操作、无居中/偏移。
 - `YizPrintFile` / `YizPrintMemory` 接收同一组结构化参数，支持 Print、Inspect、Emf 三种操作。Inspect 不需要打印机；Emf 需要打印机和输出路径，只记录第一页，不创建打印作业。
 - 路径、打印机名为 UTF-16。输入字符串和 PDF 内存由调用方持有，必须在同步调用返回前保持有效且不被修改；内存输入不复制整份 PDF、不生成临时 PDF。C# 封装固定 byte[]，在返回后解除固定。
 - `YizResultJson` / `YizResultLogs` 返回 UTF-8 字符串，仅在结果对象释放前有效。使用 `YizFreeResult` 在 DLL 内部释放结果，不能由调用方 `free/delete`。
@@ -222,7 +238,7 @@ example-cpp.exe "C:\路径\票据.pdf"
 
 默认 `build.ps1` 构建 x86 与 x64；`-Architecture x86` 或 `-Architecture x64` 只构建指定架构。`dist/win-x86`、`dist/win-x64` 各自包含完整 SDK。仓库内 C# 示例默认 x86，使用 `-p:PlatformTarget=x64` 切换；发行目录内示例默认使用所在目录的架构。
 
-## 批量 API / Batch API（v0.2.0）
+## 批量 API / Batch API（v0.0.2）
 
 同一套 `YizPrintOptions` 可用于多份 PDF：
 
@@ -230,9 +246,9 @@ example-cpp.exe "C:\路径\票据.pdf"
 - `YizPrintMemoryBatch(buffers, count, options, result)`：`YizPdfBuffer` 数组，每项包含 PDF 指针和字节长度。
 - C#：`PrinterSdk.PrintFiles(string[], options)` 和 `PrinterSdk.PrintMemoryBatch(byte[][], options)`。
 
-每批 1–100 份；内存批次总大小不超过 512 MiB。整批同步、按输入顺序执行，每份 PDF 创建独立打印作业；同一 DLL 内其他调用不会插入该批次。首次失败后停止，后续项标记为 skipped，已提交的作业不回滚、不自动重试。切纸时机仍由驱动决定。支持 Print 和 Inspect；批量 Emf 不支持，以免覆盖同一路径。现有单文档接口和 ABI v1 结构体保持兼容；新增函数需要 v0.2.0 或更新 DLL。
+每批 1–100 份；内存批次总大小不超过 512 MiB。整批同步、按输入顺序执行，每份 PDF 创建独立打印作业；同一 DLL 内其他调用不会插入该批次。首次失败后停止，后续项标记为 skipped，已提交的作业不回滚、不自动重试。切纸时机仍由驱动决定。支持 Print 和 Inspect；批量 Emf 不支持，以免覆盖同一路径。现有单文档接口和 ABI v1 结构体保持兼容；新增函数需要 v0.0.2 或更新 DLL。
 
-Use one options structure for 1–100 PDFs. Each PDF remains an independent spool job, processed in input order. Calls through the same DLL cannot interleave with a running batch. Processing stops at the first failure; later items are skipped. Already submitted jobs are not rolled back or retried. Memory batches are limited to 512 MiB in total; all buffers must remain valid and unchanged until the synchronous call returns. Print and Inspect are supported; batch EMF is rejected to avoid overwriting a shared output path. Existing single-document APIs and ABI v1 remain compatible; the new exports require DLL v0.2.0 or later.
+Use one options structure for 1–100 PDFs. Each PDF remains an independent spool job, processed in input order. Calls through the same DLL cannot interleave with a running batch. Processing stops at the first failure; later items are skipped. Already submitted jobs are not rolled back or retried. Memory batches are limited to 512 MiB in total; all buffers must remain valid and unchanged until the synchronous call returns. Print and Inspect are supported; batch EMF is rejected to avoid overwriting a shared output path. Existing single-document APIs and ABI v1 remain compatible; the new exports require DLL v0.0.2 or later.
 
 ```csharp
 var options = YizPrinting.PrintOptions.Create("XP-80C");

@@ -115,7 +115,7 @@ int Batch(const wchar_t* const* paths, const YizPdfBuffer* buffers, uint32_t cou
 uint32_t YIZ_CALL YizGetAbiVersion(void) { return YIZ_ABI_VERSION; }
 int32_t YIZ_CALL YizInitOptions(YizPrintOptions* o, uint32_t size) {
   if (!o || size != sizeof(*o)) return YIZ_ARGUMENT;
-  *o = {}; o->struct_size = size; o->abi_version = YIZ_ABI_VERSION; o->scale_percent = 100;
+  *o = {}; o->struct_size = size; o->abi_version = YIZ_ABI_VERSION; o->scale_percent = 100; o->text_mode = YIZ_TEXT_ORIGINAL;
   return YIZ_OK;
 }
 int32_t YIZ_CALL YizPrintFile(const wchar_t* path, const YizPrintOptions* o, YizResult** out) {

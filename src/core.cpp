@@ -52,13 +52,13 @@ int Error(int code, const wchar_t* message, DWORD win32 = 0) {
   return code;
 }
 void Help() {
-  Line("yiz-print-pdf 0.2.0 / PDFium chromium/5414 / static\n"
+  Line("yiz-print-pdf 0.0.2 / PDFium chromium/5414 / static\n"
        "Usage:\n"
        "  yiz-print-pdf.exe --list-printers\n"
        "  yiz-print-pdf.exe --file <PDF> --inspect\n"
        "  yiz-print-pdf.exe --file <PDF> --printer <system name> [options]\n"
        "Options:\n"
-       "  --text-mode alternate|original  Default: alternate\n"
+       "  --text-mode alternate|original  Default: original\n"
        "  --scale <percent>|fit|shrink    Default: 100; percent range: 10..200\n"
        "  --center                       Center within printable area\n"
        "  --offset-x <mm> --offset-y <mm> Additional offset; positive right/down\n"
@@ -79,7 +79,7 @@ bool Number(const wchar_t* value, double& result) {
 }
 struct Options {
   std::wstring file, printer, emf;
-  bool alternate = true, inspect = false, driver_paper = true, strict = false;
+  bool alternate = false, inspect = false, driver_paper = true, strict = false;
   bool center = false, scale_set = false;
   std::wstring scale_mode = L"percent";
   double offset_x = 0, offset_y = 0;
@@ -183,7 +183,7 @@ static int Execute(int argc, const wchar_t* const* argv, const void* memory, siz
     else if (arg == L"--printer") opt.printer = value;
     else if (arg == L"--emf") opt.emf = value;
     else if (arg == L"--text-mode") {
-      if (wcscmp(value, L"alternate") && wcscmp(value, L"original")) return Error(2, L"Invalid text mode");
+      if (wcscmp(value, L"alternate") && wcscmp(value, L"original") && wcscmp(value, L"origin")) return Error(2, L"Invalid text mode");
       opt.alternate = !wcscmp(value, L"alternate");
     } else if (arg == L"--paper") {
       if (wcscmp(value, L"pdf") && wcscmp(value, L"driver")) return Error(2, L"Invalid paper mode");

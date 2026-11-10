@@ -26,7 +26,7 @@ namespace YizPrinting
         {
             return new PrintOptions {
                 StructSize = (uint)Marshal.SizeOf(typeof(PrintOptions)), AbiVersion = 1,
-                Printer = printer, ScalePercent = 100
+                Printer = printer, ScalePercent = 100, TextMode = TextMode.Original
             };
         }
     }

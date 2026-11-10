@@ -10,6 +10,7 @@ class Smoke
     static void Main(string[] args)
     {
         var bytes = File.ReadAllBytes(args[0]);
+        Check(PrintOptions.Create().TextMode == TextMode.Original, "default original text mode");
         var options = PrintOptions.Create(); options.Operation = Operation.Inspect;
         Check(PrinterSdk.YizGetAbiVersion() == 1, "ABI");
         var file = PrinterSdk.PrintFile(args[0], options);
@@ -54,5 +55,27 @@ class Smoke
         })).ToArray());
         Console.WriteLine("PASS: batch parity, partial failure, missing file, skipped items, rejected EMF/empty batch, concurrent batch");
         Console.WriteLine("PASS: ABI, file/memory parity, invalid input, repeated/concurrent calls, enumeration (no printing)");
+        // Optional non-printing regression: use a PDF whose text must all take
+        // the alternate path (e.g. non-embedded MicrosoftYaHei backed by TTC).
+        if (args.Length > 1) {
+            var emf = Path.Combine(Path.GetTempPath(), "yiz-font-check-" + Guid.NewGuid() + ".emf");
+            try {
+                options = PrintOptions.Create();
+                options.Operation = Operation.Emf;
+                options.Printer = args[1];
+                options.EmfPath = emf;
+                options.TextMode = TextMode.Alternate;
+                options.RequireAlternate = 1;
+                for (int i = 0; i < 2; ++i) {
+                    var rendered = PrinterSdk.PrintMemory(bytes, options);
+                    Check(rendered.Code == 0, "strict alternate memory rendering: " + rendered.Json);
+                    using var json = JsonDocument.Parse(rendered.Json);
+                    Check(json.RootElement.GetProperty("alternateGlyphs").GetInt32() > 0 &&
+                          json.RootElement.GetProperty("fallbackRuns").GetInt32() == 0, "no font fallback");
+                    Check(new FileInfo(emf).Length > 0, "EMF output");
+                }
+                Console.WriteLine("PASS: repeated strict alternate memory rendering, zero fallbacks (no printing)");
+            } finally { if (File.Exists(emf)) File.Delete(emf); }
+        }
     }
 }

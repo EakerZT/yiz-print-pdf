@@ -38,6 +38,45 @@ struct FontEntry {
 };
 std::map<CFX_Font*, std::unique_ptr<FontEntry>> fonts;
 
+// TTC table offsets are relative to the collection, not the selected face.
+// Rebuild an independent sfnt without changing any glyph IDs or table contents.
+bool ExtractCollectionFace(std::vector<uint8_t>& bytes, long face_index) {
+  if (bytes.size() < 4 || U32(bytes.data()) != 0x74746366) return true;
+  if (bytes.size() < 12 || face_index < 0 || face_index > 0xffff) return false;
+  uint32_t version = U32(bytes.data() + 4);
+  if (version != 0x00010000 && version != 0x00020000) return false;
+  size_t faces = U32(bytes.data() + 8);
+  if (faces > (bytes.size() - 12) / 4 || size_t(face_index) >= faces) return false;
+  size_t offset = U32(bytes.data() + 12 + size_t(face_index) * 4);
+  if (offset > bytes.size() || bytes.size() - offset < 12) return false;
+  if (U32(bytes.data() + offset) != 0x00010000) return false;
+  size_t count = U16(bytes.data() + offset + 4);
+  if (!count || count > (bytes.size() - offset - 12) / 16) return false;
+  size_t directory_size = 12 + count * 16;
+  std::vector<uint8_t> sfnt(bytes.begin() + offset,
+                            bytes.begin() + offset + directory_size);
+  for (size_t i = 0; i < count; ++i) {
+    size_t record = 12 + i * 16;
+    uint32_t tag = U32(sfnt.data() + record);
+    size_t source = U32(sfnt.data() + record + 8);
+    size_t length = U32(sfnt.data() + record + 12);
+    if (source > bytes.size() || length > bytes.size() - source) return false;
+    // Bound allocation even for malicious overlapping table records.
+    constexpr size_t kMaxFontBytes = 128 * 1024 * 1024;
+    size_t padded = (length + 3) & ~size_t(3);
+    if (padded > kMaxFontBytes || sfnt.size() > kMaxFontBytes - padded) return false;
+    size_t target = sfnt.size();
+    sfnt.insert(sfnt.end(), bytes.begin() + source, bytes.begin() + source + length);
+    sfnt.resize(target + padded, 0);
+    if (tag == 0x68656164 && length >= 12) W32(sfnt.data() + target + 8, 0);
+    W32(sfnt.data() + record + 8, uint32_t(target));
+    W32(sfnt.data() + record + 4, Checksum(sfnt, target, length));
+  }
+  bytes.swap(sfnt);
+  // RenameTrueType will update the name table and whole-font checksum.
+  return true;
+}
+
 // Give the embedded font a unique private name. Otherwise GDI can select the
 // system's full SimSun instead of the PDF subset, whose glyph IDs differ.
 bool RenameTrueType(FontEntry& entry, const std::wstring& name) {
@@ -93,7 +132,9 @@ FontEntry* GetFont(CFX_Font* font) {
   item->bytes.assign(data.begin(), data.end());
   wchar_t name[LF_FACESIZE];
   swprintf_s(name, L"YizPdf%08lx%08lx", GetCurrentProcessId(), ++sequence);
-  if (RenameTrueType(*item, name)) {
+  auto* face = font->GetFaceRec();
+  if (face && ExtractCollectionFace(item->bytes, face->face_index) &&
+      RenameTrueType(*item, name)) {
     DWORD count = 0;
     item->registration = AddFontMemResourceEx(item->bytes.data(), DWORD(item->bytes.size()), nullptr, &count);
     if (item->registration) {
