@@ -12,9 +12,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define YIZ_ABI_VERSION 1
+#define YIZ_ABI_VERSION 2
 enum YizScaleMode { YIZ_SCALE_PERCENT = 0, YIZ_SCALE_FIT = 1, YIZ_SCALE_SHRINK = 2 };
 enum YizPaperMode { YIZ_PAPER_DRIVER = 0, YIZ_PAPER_PDF = 1 };
+enum YizOrientation { YIZ_ORIENTATION_DRIVER = 0, YIZ_ORIENTATION_PORTRAIT = 1, YIZ_ORIENTATION_LANDSCAPE = 2 };
 enum YizTextMode { YIZ_TEXT_ALTERNATE = 0, YIZ_TEXT_ORIGINAL = 1 };
 enum YizOperation { YIZ_PRINT = 0, YIZ_INSPECT = 1, YIZ_EMF = 2 };
 enum YizError { YIZ_OK = 0, YIZ_ARGUMENT = 2, YIZ_PDF = 3, YIZ_PRINTER = 4,
@@ -26,6 +27,7 @@ typedef struct YizPrintOptions {
   const wchar_t* printer; /* UTF-16 system printer name; not an alias. */
   const wchar_t* emf_path; /* Required for YIZ_EMF. No spool job is created. */
   int32_t scale_mode, paper_mode, text_mode, operation;
+  int32_t orientation; /* YizOrientation; driver preserves existing paper behavior. */
   int32_t center, require_alternate; /* 0 or 1 */
   double scale_percent; /* 10..200; used only by YIZ_SCALE_PERCENT */
   double width_mm, height_mm; /* both zero (default) or both >0..3000 */

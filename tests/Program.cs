@@ -3,22 +3,49 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Text.Json;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using System.Globalization;
 using YizPrinting;
 class Smoke
 {
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }
+    [DllImport("yiz-print-pdf.dll", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+    static extern int YizInitOptions(ref PrintOptions options, uint size);
     static void Main(string[] args)
     {
         var bytes = File.ReadAllBytes(args[0]);
         Check(PrintOptions.Create().TextMode == TextMode.Original, "default original text mode");
+        var initialized = new PrintOptions();
+        Check(YizInitOptions(ref initialized, (uint)Marshal.SizeOf<PrintOptions>()) == 0 &&
+              initialized.AbiVersion == 2 && initialized.Orientation == Orientation.Driver, "native ABI v2 defaults and structure layout");
         var options = PrintOptions.Create(); options.Operation = Operation.Inspect;
-        Check(PrinterSdk.YizGetAbiVersion() == 1, "ABI");
+        Check(PrinterSdk.YizGetAbiVersion() == 2, "ABI v2");
         var file = PrinterSdk.PrintFile(args[0], options);
         var memory = PrinterSdk.PrintMemory(bytes, options);
         Check(file.Code == 0 && memory.Code == 0 && file.Json == memory.Json, "file/memory parity");
-        options.AbiVersion = 99;
+        options.AbiVersion = 1;
         Check(PrinterSdk.PrintMemory(bytes, options).Code == 2, "ABI rejection");
-        options.AbiVersion = 1; options.ScaleMode = (ScaleMode)99;
+        options.AbiVersion = 2;
+        options.StructSize -= 8;
+        Check(PrinterSdk.PrintMemory(bytes, options).Code == 2, "old structure size rejection");
+        options.StructSize += 8;
+        foreach (var invalid in new[] { -1, 3 }) {
+            options.Orientation = (Orientation)invalid;
+            Check(PrinterSdk.PrintFile(args[0], options).Code == 2 &&
+                  PrinterSdk.PrintMemory(bytes, options).Code == 2 &&
+                  PrinterSdk.PrintFiles(new[] { args[0] }, options).Code == 2 &&
+                  PrinterSdk.PrintMemoryBatch(new[] { bytes }, options).Code == 2, "invalid orientation rejected by all input APIs");
+        }
+        foreach (Orientation orientation in Enum.GetValues(typeof(Orientation))) {
+            options.Orientation = orientation;
+            Check(PrinterSdk.PrintFile(args[0], options).Json == file.Json &&
+                  PrinterSdk.PrintMemory(bytes, options).Json == file.Json &&
+                  PrinterSdk.PrintMemoryBatch(new[] { bytes }, options).Code == 0,
+                  "inspect preserves PDF dimensions for " + orientation);
+        }
+        options.Orientation = Orientation.Driver;
+        options.ScaleMode = (ScaleMode)99;
         Check(PrinterSdk.PrintMemory(bytes, options).Code == 2, "enum rejection");
         options.ScaleMode = ScaleMode.Percent;
         Check(PrinterSdk.PrintMemory(new byte[]{1,2,3}, options).Code == 3, "bad PDF");
@@ -60,6 +87,34 @@ class Smoke
         if (args.Length > 1) {
             var emf = Path.Combine(Path.GetTempPath(), "yiz-font-check-" + Guid.NewGuid() + ".emf");
             try {
+                // Render with a printer DC only: EMF never calls StartDoc.
+                foreach (PaperMode paper in Enum.GetValues(typeof(PaperMode))) {
+                    foreach (bool fixedSize in new[] { false, true }) {
+                        foreach (Orientation orientation in Enum.GetValues(typeof(Orientation))) {
+                            options = PrintOptions.Create(args[1]);
+                            options.Operation = Operation.Emf;
+                            options.EmfPath = emf;
+                            options.PaperMode = paper;
+                            options.Orientation = orientation;
+                            options.ScaleMode = ScaleMode.Fit;
+                            if (fixedSize) { options.WidthMm = 80; options.HeightMm = 120; }
+                            var rendered = PrinterSdk.PrintMemory(bytes, options);
+                            Check(rendered.Code == 0, "orientation EMF rendering: " + rendered.Json);
+                            Check(new FileInfo(emf).Length > 0, "orientation EMF output");
+                            var size = Regex.Match(rendered.Logs, @"physical=([\d.]+)x([\d.]+)mm");
+                            Check(size.Success, "driver dimensions logged");
+                            double width = double.Parse(size.Groups[1].Value, CultureInfo.InvariantCulture);
+                            double height = double.Parse(size.Groups[2].Value, CultureInfo.InvariantCulture);
+                            if (orientation != Orientation.Driver)
+                                Check(orientation == Orientation.Landscape ? width > height : width < height,
+                                      "driver applies " + orientation + " with " + paper + ", fixed=" + fixedSize);
+                            var fromFile = PrinterSdk.PrintFile(args[0], options);
+                            Check(fromFile.Code == 0 && fromFile.Json == rendered.Json && fromFile.Logs == rendered.Logs,
+                                  "file/memory orientation rendering parity");
+                        }
+                    }
+                }
+                Console.WriteLine("PASS: driver/portrait/landscape via EMF, driver/PDF/fixed paper, file/memory parity (no printing)");
                 options = PrintOptions.Create();
                 options.Operation = Operation.Emf;
                 options.Printer = args[1];

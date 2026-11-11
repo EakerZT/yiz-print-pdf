@@ -2,7 +2,13 @@
 
 **Windows 原生 PDF 打印工具与 SDK / Native PDF printing tool and SDK for Windows**
 
-当前版本 / Current release: **0.4.0** — [下载 / Download](https://github.com/EakerZT/yiz-print-pdf/releases/tag/v0.4.0)
+当前版本 / Current release: **0.5.0**（ABI v2）— [下载 / Download](https://github.com/EakerZT/yiz-print-pdf/releases/tag/v0.5.0)
+
+### 0.5.0 更新 / What's new
+
+- C ABI 新增 `YizOrientation` 和 `YizPrintOptions.orientation`；C# 新增 `Orientation` 枚举和 `PrintOptions.Orientation`，支持 Driver、Portrait、Landscape，适用于文件、内存和批量调用。
+- ABI 升级为 v2，必须同时更新 DLL、头文件和 C# 绑定并重新编译调用方；不兼容 ABI v1。默认 Driver 与 CLI `--orientation driver` 行为一致。
+- C ABI v2 adds `YizPrintOptions.orientation`; C# exposes `PrintOptions.Orientation`. File, memory and batch calls share Driver/Portrait/Landscape settings. Rebuild callers with matching headers, bindings and DLLs; ABI v1 is not supported.
 
 ### 0.4.0 更新 / What's new
 
@@ -106,7 +112,7 @@ Build both architectures with `./build.ps1`, or select one with `./build.ps1 -Ar
 
 纸型通过 DEVMODE 交给驱动确认，最终尺寸以驱动接受的设置为准。日志输出 PDF 尺寸、请求纸张尺寸、驱动物理尺寸、可打印尺寸、左上右下硬件边距、实际缩放比例、绘制起点和输出尺寸。
 
-`--orientation driver` 保留原行为：驱动纸型沿用驱动方向，PDF 或固定自定义纸型沿用纵向。`portrait` / `landscape` 覆盖这个方向设置，纸型宽高仍按原值提交，布局按驱动实际返回的可打印区域计算。如果驱动在确认配置时拒绝显式方向，命令返回 4。可配合 `--emf` 验证，无需出纸；`--inspect` 仍只报告 PDF 自身尺寸。现有 SDK 接口不变。
+`--orientation driver` 保留原行为：驱动纸型沿用驱动方向，PDF 或固定自定义纸型沿用纵向。`portrait` / `landscape` 覆盖这个方向设置，纸型宽高仍按原值提交，布局按驱动实际返回的可打印区域计算。如果驱动在确认配置时拒绝显式方向，命令返回 4。可配合 `--emf` 验证，无需出纸；`--inspect` 仍只报告 PDF 自身尺寸。SDK 的 `orientation` / `Orientation` 使用相同规则，不额外旋转 PDF 内容。
 
 百分比模式默认按物理纸张左上角对齐，保持原有行为；`fit` / `shrink` 默认按可打印区域左上角对齐，同时考虑可打印宽度和高度。`--center` 将任意模式改为在可打印区域居中；偏移在对齐之后叠加。缩放不会裁掉 PDF 自带留白，也不会改变纸张大小。`clipped=1` 表示页面矩形超出可打印区域，空白超出也会触发，并不一定代表文字被裁切。EMF 记录相同布局，但不模拟硬件裁切。
 
@@ -175,7 +181,7 @@ TTC collections are supported by extracting the exact face selected by PDFium/Fr
 
 纸张清晰度、条码扫描、切纸、多页及 Win7 实机兼容性待手动验证。
 
-## 原生 SDK（ABI v1）
+## 原生 SDK（ABI v2）
 
 构建同时输出两个独立产物，共用 `src/core.cpp` 与文字绘制实现：
 
@@ -197,7 +203,8 @@ EXE 与 DLL 各自仅依赖 Windows 系统 DLL 和安装的打印机驱动。C++
 ### C ABI 约定
 
 - `__cdecl` 调用约定，导出函数名不带修饰；结构体 `Pack=8`，枚举和开关均为 32 位整数。
-- `YizInitOptions(&options, sizeof(options))` 初始化：ABI=1、driver 纸张、100% 缩放、original 文字、打印操作、无居中/偏移。
+- `YizInitOptions(&options, sizeof(options))` 初始化：ABI=2、driver 纸张及方向、100% 缩放、original 文字、打印操作、无居中/偏移。
+- `orientation`：`YIZ_ORIENTATION_DRIVER=0`（默认）、`YIZ_ORIENTATION_PORTRAIT=1`、`YIZ_ORIENTATION_LANDSCAPE=2`。C# 对应 `Orientation.Driver` / `Portrait` / `Landscape`。同批文档共用方向；Inspect 接受合法方向但不改变报告的 PDF 页面尺寸。
 - `YizPrintFile` / `YizPrintMemory` 接收同一组结构化参数，支持 Print、Inspect、Emf 三种操作。Inspect 不需要打印机；Emf 需要打印机和输出路径，只记录第一页，不创建打印作业。
 - 路径、打印机名为 UTF-16。输入字符串和 PDF 内存由调用方持有，必须在同步调用返回前保持有效且不被修改；内存输入不复制整份 PDF、不生成临时 PDF。C# 封装固定 byte[]，在返回后解除固定。
 - `YizResultJson` / `YizResultLogs` 返回 UTF-8 字符串，仅在结果对象释放前有效。使用 `YizFreeResult` 在 DLL 内部释放结果，不能由调用方 `free/delete`。
@@ -215,6 +222,7 @@ EXE 与 DLL 各自仅依赖 Windows 系统 DLL 和安装的打印机驱动。C++
 ```csharp
 var options = YizPrinting.PrintOptions.Create("XP-80C");
 options.ScaleMode = YizPrinting.ScaleMode.Fit;
+options.Orientation = YizPrinting.Orientation.Landscape;
 // pdfBytes 直接来自 PDF 生成器，不必保存临时文件。
 var result = await Task.Run(() => YizPrinting.PrinterSdk.PrintMemory(pdfBytes, options));
 // result.Code、result.Json、result.Logs；业务层按返回码处理，不自动重试。
@@ -257,9 +265,9 @@ example-cpp.exe "C:\路径\票据.pdf"
 - `YizPrintMemoryBatch(buffers, count, options, result)`：`YizPdfBuffer` 数组，每项包含 PDF 指针和字节长度。
 - C#：`PrinterSdk.PrintFiles(string[], options)` 和 `PrinterSdk.PrintMemoryBatch(byte[][], options)`。
 
-每批 1–100 份；内存批次总大小不超过 512 MiB。整批同步、按输入顺序执行，每份 PDF 创建独立打印作业；同一 DLL 内其他调用不会插入该批次。首次失败后停止，后续项标记为 skipped，已提交的作业不回滚、不自动重试。切纸时机仍由驱动决定。支持 Print 和 Inspect；批量 Emf 不支持，以免覆盖同一路径。现有单文档接口和 ABI v1 结构体保持兼容；新增函数需要 v0.2.0 或更新 DLL。
+每批 1–100 份；内存批次总大小不超过 512 MiB。整批同步、按输入顺序执行，每份 PDF 创建独立打印作业；同一 DLL 内其他调用不会插入该批次。首次失败后停止，后续项标记为 skipped，已提交的作业不回滚、不自动重试。切纸时机仍由驱动决定。支持 Print 和 Inspect；批量 Emf 不支持，以免覆盖同一路径。单文档与批量接口均使用 ABI v2 结构体和方向参数。
 
-Use one options structure for 1–100 PDFs. Each PDF remains an independent spool job, processed in input order. Calls through the same DLL cannot interleave with a running batch. Processing stops at the first failure; later items are skipped. Already submitted jobs are not rolled back or retried. Memory batches are limited to 512 MiB in total; all buffers must remain valid and unchanged until the synchronous call returns. Print and Inspect are supported; batch EMF is rejected to avoid overwriting a shared output path. Existing single-document APIs and ABI v1 remain compatible; the new exports require DLL v0.2.0 or later.
+Use one options structure for 1–100 PDFs. Each PDF remains an independent spool job, processed in input order. Calls through the same DLL cannot interleave with a running batch. Processing stops at the first failure; later items are skipped. Already submitted jobs are not rolled back or retried. Memory batches are limited to 512 MiB in total; all buffers must remain valid and unchanged until the synchronous call returns. Print and Inspect are supported; batch EMF is rejected to avoid overwriting a shared output path. Single-document and batch APIs use ABI v2 options, including the shared orientation.
 
 ```csharp
 var options = YizPrinting.PrintOptions.Create("XP-80C");
@@ -274,6 +282,7 @@ YizPrintOptions options;
 YizInitOptions(&options, sizeof(options));
 options.printer = L"XP-80C";
 options.scale_mode = YIZ_SCALE_FIT;
+options.orientation = YIZ_ORIENTATION_LANDSCAPE;
 const wchar_t* paths[] = { L"a.pdf", L"b.pdf" };
 YizResult* result = nullptr;
 int code = YizPrintFiles(paths, 2, &options, &result);

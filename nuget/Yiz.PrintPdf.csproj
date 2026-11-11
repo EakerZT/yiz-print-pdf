@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PackageId>Yiz.PrintPdf</PackageId>
+    <Version>0.5.0</Version>
+    <AssemblyName>Yiz.PrintPdf</AssemblyName>
+    <RootNamespace>YizPrinting</RootNamespace>
+    <Authors>EakerZT</Authors>
+    <Description>Windows 原生 PDF 打印 SDK，支持文件、内存和批量输入。Native Windows PDF printing SDK with file, memory and batch input, alternative text rendering, and x86/x64 support.</Description>
+    <PackageProjectUrl>https://github.com/EakerZT/yiz-print-pdf</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/EakerZT/yiz-print-pdf.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>pdf;printing;pdfium;windows;native;thermal</PackageTags>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IsPackable>true</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../bindings/YizPrintPdf.cs" Link="YizPrintPdf.cs" />
+    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="ref/netstandard2.0/;runtimes/win-x86/lib/netstandard2.0/;runtimes/win-x64/lib/netstandard2.0/" />
+    <None Include="../dist/win-x86/yiz-print-pdf.dll" Pack="true" PackagePath="runtimes/win-x86/native/" />
+    <None Include="../dist/win-x64/yiz-print-pdf.dll" Pack="true" PackagePath="runtimes/win-x64/native/" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="../dist/win-x64/THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="/" />
+  </ItemGroup>
+  <Target Name="CheckNativeBinaries" BeforeTargets="Pack">
+    <Error Condition="!Exists('../dist/win-x86/yiz-print-pdf.dll') Or !Exists('../dist/win-x64/yiz-print-pdf.dll')" Text="Build both native architectures with build.ps1 before packing." />
+  </Target>
+</Project>

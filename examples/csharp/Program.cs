@@ -7,6 +7,7 @@ class Program
     {
         if (args.Length == 0) { Console.WriteLine("example PDF [printer] [emf-path | --print]"); return 2; }
         var options = PrintOptions.Create();
+        options.Orientation = Orientation.Landscape; // Driver / Portrait also supported.
         options.Operation = Operation.Inspect;
         if (args.Length >= 3) {
             options.Printer = args[1]; options.ScaleMode = ScaleMode.Fit;

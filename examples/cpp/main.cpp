@@ -7,6 +7,7 @@ int wmain(int argc, wchar_t** argv) {
   // Default is inspect only; printing requires explicit --print.
   YizPrintOptions options;
   if (YizInitOptions(&options, sizeof(options))) return 2;
+  options.orientation = YIZ_ORIENTATION_LANDSCAPE; // Driver / portrait also supported.
   options.operation = YIZ_INSPECT;
   if (argc > 3) {
     options.printer = argv[2]; options.scale_mode = YIZ_SCALE_FIT;

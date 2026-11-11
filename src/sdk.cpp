@@ -31,6 +31,7 @@ int Invoke(const wchar_t* path, const void* bytes, size_t length, bool memory,
     return Fail(out, YIZ_ARGUMENT, "Invalid options size or ABI version");
   if (o->scale_mode < 0 || o->scale_mode > 2 || o->paper_mode < 0 || o->paper_mode > 1 ||
       o->text_mode < 0 || o->text_mode > 1 || o->operation < 0 || o->operation > 2 ||
+      o->orientation < YIZ_ORIENTATION_DRIVER || o->orientation > YIZ_ORIENTATION_LANDSCAPE ||
       o->center < 0 || o->center > 1 || o->require_alternate < 0 || o->require_alternate > 1)
     return Fail(out, YIZ_ARGUMENT, "Invalid enum or boolean");
   if (!std::isfinite(o->width_mm) || !std::isfinite(o->height_mm) || o->width_mm < 0 || o->height_mm < 0)
@@ -44,6 +45,7 @@ int Invoke(const wchar_t* path, const void* bytes, size_t length, bool memory,
   std::vector<std::wstring> args = {L"sdk", L"--file", memory ? L"Memory PDF" : path,
     L"--printer", o->printer ? o->printer : L"", L"--paper", o->paper_mode == YIZ_PAPER_DRIVER ? L"driver" : L"pdf",
     L"--text-mode", o->text_mode == YIZ_TEXT_ALTERNATE ? L"alternate" : L"original",
+    L"--orientation", o->orientation == YIZ_ORIENTATION_PORTRAIT ? L"portrait" : o->orientation == YIZ_ORIENTATION_LANDSCAPE ? L"landscape" : L"driver",
     L"--scale", o->scale_mode == YIZ_SCALE_FIT ? L"fit" : o->scale_mode == YIZ_SCALE_SHRINK ? L"shrink" : Number(o->scale_percent),
     L"--offset-x", Number(o->offset_x_mm), L"--offset-y", Number(o->offset_y_mm)};
   if (o->width_mm != 0 || o->height_mm != 0) {

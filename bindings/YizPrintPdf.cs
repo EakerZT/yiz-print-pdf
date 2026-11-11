@@ -6,10 +6,11 @@ namespace YizPrinting
 {
     public enum ScaleMode { Percent, Fit, Shrink }
     public enum PaperMode { Driver, Pdf }
+    public enum Orientation { Driver, Portrait, Landscape }
     public enum TextMode { Alternate, Original }
     public enum Operation { Print, Inspect, Emf }
 
-    // ABI v1, Pack=8; fields use explicit 32-bit integers (no native bool).
+    // ABI v2, Pack=8; fields use explicit 32-bit integers (no native bool).
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 8)]
     public struct PrintOptions
     {
@@ -20,12 +21,13 @@ namespace YizPrinting
         public PaperMode PaperMode;
         public TextMode TextMode;
         public Operation Operation;
+        public Orientation Orientation;
         public int Center, RequireAlternate;
         public double ScalePercent, WidthMm, HeightMm, OffsetXMm, OffsetYMm;
         public static PrintOptions Create(string printer = null)
         {
             return new PrintOptions {
-                StructSize = (uint)Marshal.SizeOf(typeof(PrintOptions)), AbiVersion = 1,
+                StructSize = (uint)Marshal.SizeOf(typeof(PrintOptions)), AbiVersion = 2,
                 Printer = printer, ScalePercent = 100, TextMode = TextMode.Original
             };
         }
